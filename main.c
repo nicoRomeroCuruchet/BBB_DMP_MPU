@@ -77,20 +77,22 @@ int main(){
     return -1;
   }
 
-  float gyro_pitch_offset = 0;
+  float roll_gyro_offset = 0;
   for(unsigned int i = 0; i < 3000; i++){
 
     mpu_get_gyro_reg(gyro_xyz);
-    gyro_pitch_offset += gyro_xyz[PITCH];
+    roll_gyro_offset += gyro_xyz[0];
     
   }
-  gyro_pitch_offset /= 3000;
 
-  float roll_acc, pitch_acc;
+  roll_gyro_offset /= 3000;
+
+  float roll_acc;
   //printf("DMP - ROLL");
+  printf("ROLL_DMP ROLL_ACC ROLL_RATE_DMP ROLL_RATE_GYRO\n");
   for(;;)
   { 
-     // DMP update, YAW PITCH ROLL (ypr)
+     // DMP update, YAW - PITCH - ROLL (ypr)
      updateDMP();
 
      // read direct registers of accelerometer
@@ -98,16 +100,16 @@ int main(){
      mpu_get_gyro_reg(gyro_xyz);
 
      // estimate roll and pitch directs accelerometer reads
-     pitch_acc = atan2(acc_xyz[0], sqrt(acc_xyz[1]*acc_xyz[1] + acc_xyz[2]*acc_xyz[2]))*180/M_PI;
+     //pitch_acc = atan2(acc_xyz[0], sqrt(acc_xyz[1]*acc_xyz[1] + acc_xyz[2]*acc_xyz[2]))*180/M_PI;
      roll_acc = atan2(acc_xyz[1],acc_xyz[2])*180/M_PI;
 
-     printf("ROLL_DMP: %2.2f PITCH_DMP: %2.2f, YAW_DMP: %2.2f PITCH_ACC %2.2f ROLL_ACC: %2.2f\n", 
-                                                       ypr[ROLL],ypr[PITCH], ypr[YAW], pitch_acc, roll_acc);
+     // ROLL - Rotate around X
+     // PITCH - Rotate  around Y
+     printf("%2.4f %2.4f %2.4f %2.4f\n", ypr[ROLL], roll_acc, gyro[ROLL] / 16.4, (gyro_xyz[0] - roll_gyro_offset)/16.4 );
 
-     printf("GYRO_DMP: %2.3f, GYRO: %2.3f\n", gyro[PITCH] /16.4, gyro_xyz[PITCH]/16.4);
-
-     gcvt(ypr[ROLL], 4, dmp_roll_acc_str);
-     gcvt(roll_acc, 4,  roll_acc_str);
+     // convert to string to transmit via UART
+     gcvt( (gyro[ROLL] / 16.4), 4, dmp_roll_acc_str);
+     gcvt((gyro_xyz[0] - roll_gyro_offset)/16.4, 4,  roll_acc_str);
 
      strcpy(to_uart, "DMP_ROLL:");
      strcat(to_uart, dmp_roll_acc_str);
@@ -115,16 +117,17 @@ int main(){
      strcat(to_uart, "ACC_ROLL:");
      strcat(to_uart, roll_acc_str);
      strcat(to_uart,  "\n");
-     //printf("%s %d\n",to_uart, strlen(to_uart)); 
-     
+
      if ((count = write(file, to_uart,strlen(to_uart)))<0){
        perror("Failed to write to the output\n");
        return -1;
      }
+     delay_ms(5);
   }
 
   return 0;
 }
+
 
 int initDMP(void)
 {
