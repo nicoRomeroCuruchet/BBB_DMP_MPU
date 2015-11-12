@@ -32,6 +32,8 @@ int16_t c[3];
 VectorFloat gravity;    // [x, y, z]            gravity vector
 
 float ypr[3];
+int16_t ypr_acc[3];
+
 Quaternion q;
 float gyro[3];
 float accel[3];
@@ -54,12 +56,19 @@ int main(){
     return -1;
   }
 
-  
+  float roll_acc, pitch_acc;
+
   for(;;)
   { 
 
+     // DMP update
      update_MPU();
-     printf("ROLL: %2.2f PITCH: %2.2f, YAW: %2.2f\n", ypr[ROLL],ypr[PITCH], ypr[YAW]);
+     // read direct registers of accelerometer
+     mpu_get_accel_reg(ypr_acc);
+     // estimate roll and pitch from accelerometer reads
+     pitch_acc = atan2(-ypr_acc[0], sqrt(ypr_acc[1]*ypr_acc[1] + ypr_acc[2]*ypr_acc[2]))*RAD_TO_DEG;
+     roll_acc = atan2( -ypr_acc[1],  sqrt(ypr_acc[0]*ypr_acc[0] + ypr_acc[2]*ypr_acc[2]))*RAD_TO_DEG; 
+     printf("ROLL: %2.2f PITCH: %2.2f, YAW: %2.2f PITCH_ACC %2.2f ROLL_ACC: %2.2f\n", ypr[ROLL],ypr[PITCH], ypr[YAW], pitch_acc, roll_acc);
 
   }
   
