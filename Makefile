@@ -2,7 +2,7 @@ CXX=arm-linux-gnueabihf-g++-4.6
 CXXFLAGS= -Wall -g -O2 -std=gnu++0x 
 CXX_OPTS= -Wall -g -O2 -std=gnu++0x
 
-PROG=main_dmp
+PROG=dmp
 
 %.o: %.c                                                                         
 	$(CXX) $(CXXFLAGS) $(CXX_OPTS) $< -o $@ 
