@@ -9,8 +9,17 @@
 #include "MotionSensor/inv_mpu_lib/inv_mpu.h"
 #include "MotionSensor/inv_mpu_lib/inv_mpu_dmp_motion_driver.h"
 
+#define DIM 3
+#define YAW 0 
+#define PITCH 1
+#define ROLL 2
+
 #define wrap_180(x) (x < -180 ? x+360 : (x > 180 ? x - 360: x))
 #define delay_ms(a)    usleep(a*1000)
+#define RAD_TO_DEG  57.296
+
+int r;
+int16_t sensors;
 
 uint8_t fifoCount;         // count of all bytes currently in FIFO
 uint8_t fifoBuffer[64];    // FIFO storage buffer
@@ -18,17 +27,41 @@ uint8_t fifoBuffer[64];    // FIFO storage buffer
 int16_t a[3];              // [x, y, z]            accel vector
 int16_t g[3];              // [x, y, z]            gyro vector
 int32_t _q[4];
-Quaternion q;
+int16_t c[3];
 
-int r;
-int16_t sensors;
+VectorFloat gravity;    // [x, y, z]            gravity vector
+
+float ypr[3];
+Quaternion q;
+float gyro[3];
+float accel[3];
+float compass[3];
+
 
 
 int init_MPU(void);
+void update_MPU(void);
+uint8_t GetGravity(VectorFloat *v, Quaternion *q);
+uint8_t GetYawPitchRoll(float *data, Quaternion *q, VectorFloat *gravity);
 
 int main(){
 
   int dmpReady = init_MPU();
+ 
+  if (!dmpReady) 
+  {
+    printf("Error: DMP not ready!!\n");
+    return -1;
+  }
+
+  
+  for(;;)
+  { 
+
+     update_MPU();
+     printf("ROLL: %2.2f PITCH: %2.2f, YAW: %2.2f\n", ypr[ROLL],ypr[PITCH], ypr[YAW]);
+
+  }
   
 
   return 0;
@@ -36,14 +69,14 @@ int main(){
 
 int init_MPU(void)
 {
-   // initialize device
-   printf("Initializing MPU...\n");
-   if (mpu_init(NULL) != 0)
-   {
-     printf("MPU init failed!\n");
-     return -1;
-   }
 
+  // initialize device
+  printf("Initializing MPU...\n");
+  if (mpu_init(NULL) != 0)
+  {
+    printf("MPU init failed!\n");
+    return -1;
+  }
   printf("Setting MPU sensors...\n");
   if (mpu_set_sensors(INV_XYZ_GYRO|INV_XYZ_ACCEL)!=0)
   {
@@ -56,7 +89,6 @@ int init_MPU(void)
     printf("Failed to set gyro sensitivity!\n");
     return -1;
   }
-
   printf("Setting ACCEL sensitivity...\n");
   if (mpu_set_accel_fsr(2)!=0)
   {
@@ -99,7 +131,6 @@ int init_MPU(void)
     return -1;
   }
 
-
   printf("Setting DMP fifo rate...\n");
   uint8_t rate = 100;
   if (dmp_set_fifo_rate(rate)!=0) 
@@ -126,27 +157,51 @@ int init_MPU(void)
   return 1;
 }
 
+void update_MPU(void)
+{
 
+   while (dmp_read_fifo(g,a,_q,&sensors,&fifoCount)!=0); //gyro and accel can be null because of being disabled in the efeatures
+   q = _q;
+   GetGravity(&gravity, &q);
+   GetYawPitchRoll(ypr, &q, &gravity);
 
+   //scaling for degrees output
+   for (int i=0;i<DIM;i++)
+     ypr[i]*=180/M_PI;
 
+   //unwrap yaw when it reaches 180
+   ypr[0] = wrap_180(ypr[0]);
 
+  //change sign of Pitch, MPU is attached upside down
+  ypr[1]*=-1.0;
+
+  //0=gyroX, 1=gyroY, 2=gyroZ
+  //swapped to match Yaw,Pitch,Roll
+  //Scaled from deg/s to get tr/s
+  for (int i=0;i<DIM;i++)
+  {
+  gyro[i]   = (float)(g[DIM-i-1])/131.0/360.0;
+  accel[i]  = (float)(a[DIM-i-1]);
+  compass[i] = (float)(c[DIM-i-1]);
+  }
+}
 
 
 uint8_t GetGravity(VectorFloat *v, Quaternion *q) {
-        v -> x = 2 * (q -> x*q -> z - q -> w*q -> y);
-        v -> y = 2 * (q -> w*q -> x + q -> y*q -> z);
-        v -> z = q -> w*q -> w - q -> x*q -> x - q -> y*q -> y + q -> z*q -> z;
-        return 0;
+  v -> x = 2 * (q -> x*q -> z - q -> w*q -> y);
+  v -> y = 2 * (q -> w*q -> x + q -> y*q -> z);
+  v -> z = q -> w*q -> w - q -> x*q -> x - q -> y*q -> y + q -> z*q -> z;
+  return 0;
 }
 
 uint8_t GetYawPitchRoll(float *data, Quaternion *q, VectorFloat *gravity) {
-        // yaw: (about Z axis)
-        data[0] = atan2(2*q -> x*q -> y - 2*q -> w*q -> z, 2*q -> w*q -> w + 2*q -> x*q -> x - 1);
-        // pitch: (nose up/down, about Y axis)
-        data[1] = atan(gravity -> x / sqrt(gravity -> y*gravity -> y + gravity -> z*gravity -> z));
-        // roll: (tilt left/right, about X axis)
-        data[2] = atan(gravity -> y / sqrt(gravity -> x*gravity -> x + gravity -> z*gravity -> z));
-        return 0;
+  // yaw: (about Z axis)
+  data[0] = atan2(2*q -> x*q -> y - 2*q -> w*q -> z, 2*q -> w*q -> w + 2*q -> x*q -> x - 1);
+  // pitch: (nose up/down, about Y axis)
+  data[1] = atan(gravity -> x / sqrt(gravity -> y*gravity -> y + gravity -> z*gravity -> z));
+  // roll: (tilt left/right, about X axis)
+  data[2] = atan(gravity -> y / sqrt(gravity -> x*gravity -> x + gravity -> z*gravity -> z));
+  return 0;
 }
 
 
