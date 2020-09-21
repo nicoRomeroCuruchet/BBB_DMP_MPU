@@ -48,14 +48,13 @@ void update_MPU(void);
 uint8_t GetGravity(VectorFloat *v, Quaternion *q);
 uint8_t GetYawPitchRoll(float *data, Quaternion *q, VectorFloat *gravity);
 
-char pitch_acc_str[10];
-char roll_acc_str[10];
-char dmp_roll_acc_str[10];
-char to_uart[20];
-
 int main(){
 
   int file, count;
+  char roll_acc_str[10];
+  char dmp_roll_acc_str[10];
+  char to_uart[20];
+
   if ((file = open("/dev/ttyO4", O_RDWR | O_NOCTTY | O_NDELAY))<0){
      perror("UART: Failed to open the file.\n");
      return -1;
@@ -103,15 +102,15 @@ int main(){
      strcpy(to_uart, dmp_roll_acc_str);
      strcat(to_uart, "\t");
      strcat(to_uart, roll_acc_str);
-     //printf("%s\n",to_uart); 
-     to_uart[10] = '\n';
-     to_uart[11] = '\0';
+     printf("%s %d\n",to_uart, strlen(to_uart)); 
+     to_uart[1 + strlen(dmp_roll_acc_str) + strlen(roll_acc_str)] = '\n';
+     to_uart[2 + strlen(dmp_roll_acc_str) + strlen(roll_acc_str)] = '\0';
      
-     if ((count = write(file, to_uart,12))<0){
+     if ((count = write(file, to_uart,strlen(to_uart)))<0){
        perror("Failed to write to the output\n");
        return -1;
      }
-
+     for(unsigned int i = 0; i < 10; ++i ) to_uart[i] = '\0';
      delay_ms(10);
 
   }
