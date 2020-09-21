@@ -1,7 +1,7 @@
 CXX=arm-linux-gnueabihf-g++-4.6
 AR=ar
 CXXFLAGS=-Wall -g -O2 -std=gnu++0x 
-CXX_OPTS=-c -DMPU6050 -DMPU_DEBUG -I../libs/
+CXX_OPTS=-c -DMPU6050 -I../libs/
 
 SOURCES=inv_mpu_lib/inv_mpu.c inv_mpu_lib/inv_mpu_dmp_motion_driver.c
 OBJECTS=$(SOURCES:.c=.o)
