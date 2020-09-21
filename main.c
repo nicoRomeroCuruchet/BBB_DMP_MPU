@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include<fcntl.h>
+#include<termios.h> // using the termios.h library
+#include <stdint.h>
 
 #include "MotionSensor/helper_3dmath.h"
 #include "MotionSensor/inv_mpu_lib/inv_mpu.h"
@@ -32,27 +35,48 @@ int16_t c[3];
 VectorFloat gravity;    // [x, y, z]            gravity vector
 
 float ypr[3];
-int16_t ypr_acc[3];
+float ypr_acc[3];
+int16_t acc_xyz[3];
 
 Quaternion q;
 float gyro[3];
 float accel[3];
 float compass[3];
 
-
-
 int init_MPU(void);
 void update_MPU(void);
 uint8_t GetGravity(VectorFloat *v, Quaternion *q);
 uint8_t GetYawPitchRoll(float *data, Quaternion *q, VectorFloat *gravity);
 
+char pitch_acc_str[10];
+char roll_acc_str[10];
+char dmp_roll_acc_str[10];
+char to_uart[20];
+
 int main(){
+
+  int file, count;
+  if ((file = open("/dev/ttyO4", O_RDWR | O_NOCTTY | O_NDELAY))<0){
+     perror("UART: Failed to open the file.\n");
+     return -1;
+  }
+  struct termios options; // the termios structure is vital
+  tcgetattr(file, &options); // sets the parameters associated with file
+  // Set up the communications options:
+  // 9600 baud, 8-bit, enable receiver, no modem control lines
+  options.c_cflag = B9600 | CS8 | CREAD | CLOCAL;
+  options.c_iflag = IGNPAR | ICRNL; // ignore partity errors, CR -> newline
+  tcflush(file, TCIFLUSH); // discard file information not transmitted
+  tcsetattr(file, TCSANOW, &options); // changes occur immmediately
+
+
+  for(unsigned int i = 0; i < 10; ++i ) to_uart[i] = '\0';
 
   int dmpReady = init_MPU();
  
   if (!dmpReady) 
   {
-    printf("Error: DMP not ready!!\n");
+    perror("Error: DMP not ready!!\n");
     return -1;
   }
 
@@ -61,14 +85,36 @@ int main(){
   for(;;)
   { 
 
-     // DMP update
+     // DMP update, YAW PITCH ROLL (ypr)
      update_MPU();
+
      // read direct registers of accelerometer
-     mpu_get_accel_reg(ypr_acc);
-     // estimate roll and pitch from accelerometer reads
-     pitch_acc = atan2(-ypr_acc[0], sqrt(ypr_acc[1]*ypr_acc[1] + ypr_acc[2]*ypr_acc[2]))*RAD_TO_DEG;
-     roll_acc = atan2( -ypr_acc[1],  sqrt(ypr_acc[0]*ypr_acc[0] + ypr_acc[2]*ypr_acc[2]))*RAD_TO_DEG; 
-     printf("ROLL: %2.2f PITCH: %2.2f, YAW: %2.2f PITCH_ACC %2.2f ROLL_ACC: %2.2f\n", ypr[ROLL],ypr[PITCH], ypr[YAW], pitch_acc, roll_acc);
+     mpu_get_accel_reg(acc_xyz);
+
+     // estimate roll and pitch directs accelerometer reads
+     pitch_acc = atan2(acc_xyz[0], sqrt(acc_xyz[1]*acc_xyz[1] + acc_xyz[2]*acc_xyz[2]))*180/M_PI;
+     roll_acc = atan2(acc_xyz[1],acc_xyz[2])*180/M_PI;
+
+     //printf("X: %2.2f Y: %2.2f Z: %2.2f \n", gravity.x, gravity.y, gravity.z);
+     printf("ROLL: %2.2f PITCH: %2.2f, YAW: %2.2f PITCH_ACC %2.2f ROLL_ACC: %2.2f\n", 
+                                                  ypr[ROLL],ypr[PITCH], ypr[YAW], pitch_acc, roll_acc);
+
+     gcvt(ypr[ROLL], 4, dmp_roll_acc_str);
+     gcvt(roll_acc, 4,  roll_acc_str);
+
+     strcpy(to_uart, dmp_roll_acc_str);
+     strcat(to_uart, "\t");
+     strcat(to_uart, roll_acc_str);
+     printf("%s\n",to_uart); 
+     to_uart[10] = '\n';
+     to_uart[11] = '\0';
+     
+     if ((count = write(file, to_uart,12))<0){
+       perror("Failed to write to the output\n");
+       return -1;
+     }
+
+     delay_ms(10);
 
   }
   
@@ -168,7 +214,6 @@ int init_MPU(void)
 
 void update_MPU(void)
 {
-
    while (dmp_read_fifo(g,a,_q,&sensors,&fifoCount)!=0); //gyro and accel can be null because of being disabled in the efeatures
    q = _q;
    GetGravity(&gravity, &q);
@@ -179,22 +224,20 @@ void update_MPU(void)
      ypr[i]*=180/M_PI;
 
    //unwrap yaw when it reaches 180
-   ypr[0] = wrap_180(ypr[0]);
+   ypr[YAW] = wrap_180(ypr[0]);
 
   //change sign of Pitch, MPU is attached upside down
-  ypr[1]*=-1.0;
+  //ypr[PITCH]*=-1.0;
 
   //0=gyroX, 1=gyroY, 2=gyroZ
   //swapped to match Yaw,Pitch,Roll
   //Scaled from deg/s to get tr/s
-  for (int i=0;i<DIM;i++)
-  {
+  for (int i=0;i<DIM;i++){
   gyro[i]   = (float)(g[DIM-i-1])/131.0/360.0;
   accel[i]  = (float)(a[DIM-i-1]);
   compass[i] = (float)(c[DIM-i-1]);
   }
 }
-
 
 uint8_t GetGravity(VectorFloat *v, Quaternion *q) {
   v -> x = 2 * (q -> x*q -> z - q -> w*q -> y);
@@ -205,13 +248,15 @@ uint8_t GetGravity(VectorFloat *v, Quaternion *q) {
 
 uint8_t GetYawPitchRoll(float *data, Quaternion *q, VectorFloat *gravity) {
   // yaw: (about Z axis)
-  data[0] = atan2(2*q -> x*q -> y - 2*q -> w*q -> z, 2*q -> w*q -> w + 2*q -> x*q -> x - 1);
+  data[YAW] = atan2(2*q -> x*q -> y - 2*q -> w*q -> z, 2*q -> w*q -> w + 2*q -> x*q -> x - 1);
+
   // pitch: (nose up/down, about Y axis)
-  data[1] = atan(gravity -> x / sqrt(gravity -> y*gravity -> y + gravity -> z*gravity -> z));
+  //data[PITCH] = atan(gravity -> x / sqrt(gravity -> y*gravity -> y + gravity -> z*gravity -> z));
+  data[PITCH] = atan2(gravity -> x, sqrt(gravity -> y*gravity -> y + gravity -> z*gravity -> z));
+
   // roll: (tilt left/right, about X axis)
-  data[2] = atan(gravity -> y / sqrt(gravity -> x*gravity -> x + gravity -> z*gravity -> z));
+  //data[ROLL] = atan(gravity -> y / sqrt(gravity -> x*gravity -> x + gravity -> z*gravity -> z));
+  data[ROLL] = atan2(gravity -> y, gravity -> z );
   return 0;
 }
-
-
 
