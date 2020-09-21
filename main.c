@@ -71,10 +71,8 @@ int main(){
 
 
   for(unsigned int i = 0; i < 10; ++i ) to_uart[i] = '\0';
-
-  int dmpReady = init_MPU();
  
-  if (!dmpReady) 
+  if (!init_MPU()) 
   {
     perror("Error: DMP not ready!!\n");
     return -1;
@@ -82,6 +80,7 @@ int main(){
 
   float roll_acc, pitch_acc;
 
+  //printf("DMP - ROLL");
   for(;;)
   { 
 
@@ -95,9 +94,8 @@ int main(){
      pitch_acc = atan2(acc_xyz[0], sqrt(acc_xyz[1]*acc_xyz[1] + acc_xyz[2]*acc_xyz[2]))*180/M_PI;
      roll_acc = atan2(acc_xyz[1],acc_xyz[2])*180/M_PI;
 
-     //printf("X: %2.2f Y: %2.2f Z: %2.2f \n", gravity.x, gravity.y, gravity.z);
-     printf("ROLL: %2.2f PITCH: %2.2f, YAW: %2.2f PITCH_ACC %2.2f ROLL_ACC: %2.2f\n", 
-                                                  ypr[ROLL],ypr[PITCH], ypr[YAW], pitch_acc, roll_acc);
+     printf("ROLL_DMP: %2.2f PITCH_DMP: %2.2f, YAW_DMP: %2.2f PITCH_ACC %2.2f ROLL_ACC: %2.2f\n", 
+                                              ypr[ROLL],ypr[PITCH], ypr[YAW], pitch_acc, roll_acc);
 
      gcvt(ypr[ROLL], 4, dmp_roll_acc_str);
      gcvt(roll_acc, 4,  roll_acc_str);
@@ -105,7 +103,7 @@ int main(){
      strcpy(to_uart, dmp_roll_acc_str);
      strcat(to_uart, "\t");
      strcat(to_uart, roll_acc_str);
-     printf("%s\n",to_uart); 
+     //printf("%s\n",to_uart); 
      to_uart[10] = '\n';
      to_uart[11] = '\0';
      
