@@ -43,8 +43,8 @@ float gyro[3];
 float accel[3];
 float compass[3];
 
-int init_MPU(void);
-void update_MPU(void);
+int initDMP(void);
+void updateDMP(void);
 uint8_t GetGravity(VectorFloat *v, Quaternion *q);
 uint8_t GetYawPitchRoll(float *data, Quaternion *q, VectorFloat *gravity);
 
@@ -71,20 +71,18 @@ int main(){
 
   for(unsigned int i = 0; i < 10; ++i ) to_uart[i] = '\0';
  
-  if (!init_MPU()) 
-  {
+  if (!initDMP()){
     perror("Error: DMP not ready!!\n");
     return -1;
   }
 
   float roll_acc, pitch_acc;
-
   //printf("DMP - ROLL");
   for(;;)
   { 
 
      // DMP update, YAW PITCH ROLL (ypr)
-     update_MPU();
+     updateDMP();
 
      // read direct registers of accelerometer
      mpu_get_accel_reg(acc_xyz);
@@ -119,7 +117,7 @@ int main(){
   return 0;
 }
 
-int init_MPU(void)
+int initDMP(void)
 {
 
   // initialize device
@@ -209,7 +207,7 @@ int init_MPU(void)
   return 1;
 }
 
-void update_MPU(void)
+void updateDMP(void)
 {
    while (dmp_read_fifo(g,a,_q,&sensors,&fifoCount)!=0); //gyro and accel can be null because of being disabled in the efeatures
    q = _q;
