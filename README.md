@@ -8,7 +8,6 @@ BBB UART Header Pins:
     TXD    |P9_24  |   P9_21  |   Not exposed |  P9_13  |   P8_37 
     RXD    |P9_26  |   P9_22  |   Not exposed |  P9_11  |   P8_38 
 
-
 For the following example, the BBB’s UART4 is used:
 
 P9_13 UART4_TXD  <----> connected <----> RXD_USB_TTL 
@@ -27,4 +26,4 @@ CONNECTIONS BBB - MPU6050 (I2C2 /dev/i2c‐1)
     |P9_19 |SLC PIN 
     |P9_3  |VCC PIN
     |P9_1  |GND PIN
-  
+     
