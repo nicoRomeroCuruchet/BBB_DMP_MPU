@@ -27,4 +27,3 @@ CONNECTIONS BBB - MPU6050 (I2C2 /dev/i2c‐1)
     |P9_3  |VCC PIN
     |P9_1  |GND PIN
  
-![alt text]()
