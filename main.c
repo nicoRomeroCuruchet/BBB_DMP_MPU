@@ -37,6 +37,7 @@ VectorFloat gravity;    // [x, y, z]            gravity vector
 float ypr[3];
 float ypr_acc[3];
 int16_t acc_xyz[3];
+int16_t gyro_xyz[3];
 
 Quaternion q;
 float gyro[3];
@@ -45,15 +46,15 @@ float compass[3];
 
 int initDMP(void);
 void updateDMP(void);
-uint8_t GetGravity(VectorFloat *v, Quaternion *q);
-uint8_t GetYawPitchRoll(float *data, Quaternion *q, VectorFloat *gravity);
+uint8_t getGravity(VectorFloat *v, Quaternion *q);
+uint8_t getYawPitchRoll(float *data, Quaternion *q, VectorFloat *gravity);
 
 int main(){
 
   int file, count;
-  char roll_acc_str[10];
-  char dmp_roll_acc_str[10];
-  char to_uart[20];
+  char roll_acc_str[20];
+  char dmp_roll_acc_str[20];
+  char to_uart[30];
 
   if ((file = open("/dev/ttyO4", O_RDWR | O_NOCTTY | O_NDELAY))<0){
      perror("UART: Failed to open the file.\n");
@@ -63,7 +64,7 @@ int main(){
   tcgetattr(file, &options); // sets the parameters associated with file
   // Set up the communications options:
   // 9600 baud, 8-bit, enable receiver, no modem control lines
-  options.c_cflag = B9600 | CS8 | CREAD | CLOCAL;
+  options.c_cflag = B230400 | CS8 | CREAD | CLOCAL;
   options.c_iflag = IGNPAR | ICRNL; // ignore partity errors, CR -> newline
   tcflush(file, TCIFLUSH); // discard file information not transmitted
   tcsetattr(file, TCSANOW, &options); // changes occur immmediately
@@ -76,43 +77,50 @@ int main(){
     return -1;
   }
 
+  float gyro_pitch_offset = 0;
+  for(unsigned int i = 0; i < 3000; i++){
+
+    mpu_get_gyro_reg(gyro_xyz);
+    gyro_pitch_offset += gyro_xyz[PITCH];
+    
+  }
+  gyro_pitch_offset /= gyro_pitch_offset;
   float roll_acc, pitch_acc;
   //printf("DMP - ROLL");
   for(;;)
   { 
-
      // DMP update, YAW PITCH ROLL (ypr)
      updateDMP();
 
      // read direct registers of accelerometer
      mpu_get_accel_reg(acc_xyz);
+     mpu_get_gyro_reg(gyro_xyz);
 
      // estimate roll and pitch directs accelerometer reads
      pitch_acc = atan2(acc_xyz[0], sqrt(acc_xyz[1]*acc_xyz[1] + acc_xyz[2]*acc_xyz[2]))*180/M_PI;
      roll_acc = atan2(acc_xyz[1],acc_xyz[2])*180/M_PI;
 
      printf("ROLL_DMP: %2.2f PITCH_DMP: %2.2f, YAW_DMP: %2.2f PITCH_ACC %2.2f ROLL_ACC: %2.2f\n", 
-                                              ypr[ROLL],ypr[PITCH], ypr[YAW], pitch_acc, roll_acc);
+                                                       ypr[ROLL],ypr[PITCH], ypr[YAW], pitch_acc, roll_acc);
+
+     //printf("GYRO_DMP: %2.3f, GYRO: %2.3f\n", gyro[PITCH] /16.4, gyro_xyz[PITCH]/16.4);
 
      gcvt(ypr[ROLL], 4, dmp_roll_acc_str);
      gcvt(roll_acc, 4,  roll_acc_str);
 
-     strcpy(to_uart, dmp_roll_acc_str);
+     strcpy(to_uart, "DMP_ROLL:");
+     strcat(to_uart, dmp_roll_acc_str);
      strcat(to_uart, "\t");
+     strcat(to_uart, "ACC_ROLL:");
      strcat(to_uart, roll_acc_str);
-     printf("%s %d\n",to_uart, strlen(to_uart)); 
-     to_uart[1 + strlen(dmp_roll_acc_str) + strlen(roll_acc_str)] = '\n';
-     to_uart[2 + strlen(dmp_roll_acc_str) + strlen(roll_acc_str)] = '\0';
+     strcat(to_uart,  "\n");
+     //printf("%s %d\n",to_uart, strlen(to_uart)); 
      
      if ((count = write(file, to_uart,strlen(to_uart)))<0){
        perror("Failed to write to the output\n");
        return -1;
      }
-     for(unsigned int i = 0; i < 10; ++i ) to_uart[i] = '\0';
-     delay_ms(10);
-
   }
-  
 
   return 0;
 }
@@ -211,8 +219,8 @@ void updateDMP(void)
 {
    while (dmp_read_fifo(g,a,_q,&sensors,&fifoCount)!=0); //gyro and accel can be null because of being disabled in the efeatures
    q = _q;
-   GetGravity(&gravity, &q);
-   GetYawPitchRoll(ypr, &q, &gravity);
+   getGravity(&gravity, &q);
+   getYawPitchRoll(ypr, &q, &gravity);
 
    //scaling for degrees output
    for (int i=0;i<DIM;i++)
@@ -228,20 +236,20 @@ void updateDMP(void)
   //swapped to match Yaw,Pitch,Roll
   //Scaled from deg/s to get tr/s
   for (int i=0;i<DIM;i++){
-  gyro[i]   = (float)(g[DIM-i-1])/131.0/360.0;
+  gyro[i]   = (float)(g[DIM-i-1]); //131.0/360.0;
   accel[i]  = (float)(a[DIM-i-1]);
   compass[i] = (float)(c[DIM-i-1]);
   }
 }
 
-uint8_t GetGravity(VectorFloat *v, Quaternion *q) {
+uint8_t getGravity(VectorFloat *v, Quaternion *q) {
   v -> x = 2 * (q -> x*q -> z - q -> w*q -> y);
   v -> y = 2 * (q -> w*q -> x + q -> y*q -> z);
   v -> z = q -> w*q -> w - q -> x*q -> x - q -> y*q -> y + q -> z*q -> z;
   return 0;
 }
 
-uint8_t GetYawPitchRoll(float *data, Quaternion *q, VectorFloat *gravity) {
+uint8_t getYawPitchRoll(float *data, Quaternion *q, VectorFloat *gravity) {
   // yaw: (about Z axis)
   data[YAW] = atan2(2*q -> x*q -> y - 2*q -> w*q -> z, 2*q -> w*q -> w + 2*q -> x*q -> x - 1);
 
