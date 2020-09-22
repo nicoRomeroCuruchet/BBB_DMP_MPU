@@ -84,7 +84,8 @@ int main(){
     gyro_pitch_offset += gyro_xyz[PITCH];
     
   }
-  gyro_pitch_offset /= gyro_pitch_offset;
+  gyro_pitch_offset /= 3000;
+
   float roll_acc, pitch_acc;
   //printf("DMP - ROLL");
   for(;;)
@@ -103,7 +104,7 @@ int main(){
      printf("ROLL_DMP: %2.2f PITCH_DMP: %2.2f, YAW_DMP: %2.2f PITCH_ACC %2.2f ROLL_ACC: %2.2f\n", 
                                                        ypr[ROLL],ypr[PITCH], ypr[YAW], pitch_acc, roll_acc);
 
-     //printf("GYRO_DMP: %2.3f, GYRO: %2.3f\n", gyro[PITCH] /16.4, gyro_xyz[PITCH]/16.4);
+     printf("GYRO_DMP: %2.3f, GYRO: %2.3f\n", gyro[PITCH] /16.4, gyro_xyz[PITCH]/16.4);
 
      gcvt(ypr[ROLL], 4, dmp_roll_acc_str);
      gcvt(roll_acc, 4,  roll_acc_str);
