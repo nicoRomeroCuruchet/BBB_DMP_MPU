@@ -21,14 +21,12 @@ export SLOTS=/sys/devices/bone_capemgr.9/slots
 
 sudo su -c "echo BB-UART4 > $SLOTS"
 
-BBB - MPU6050
+
+CONNECTIONS BBB - MPU6050 
 
 I2C2 /dev/i2c‐1:
 
 P9_20 SDA PIN
-
 P9_19 SLC PIN 
-
 P9_3  VCC PIN
-
 P9_1  GND PIN
