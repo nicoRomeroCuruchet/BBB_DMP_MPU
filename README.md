@@ -4,11 +4,11 @@ The DMP offloads processing that would normally have to take place on the microp
 
 BBB UART Header Pins:
 
-|       |UART1  |   UART2  |   UART3       |  UART4  |   UART5
+       |UART1  |   UART2  |   UART3       |  UART4  |   UART5
 
-| TXD   |P9_24  |   P9_21  |   Not exposed |  P9_13  |   P8_37 
+       |P9_24  |   P9_21  |   Not exposed |  P9_13  |   P8_37 
 
-| RXD   |P9_26  |   P9_22  |   Not exposed |  P9_11  |   P8_38 
+       |P9_26  |   P9_22  |   Not exposed |  P9_11  |   P8_38 
 
 
 For the following example, the BBB’s UART4 is used:
