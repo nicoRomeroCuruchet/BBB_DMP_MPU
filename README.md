@@ -11,9 +11,9 @@ BBB UART Header Pins:
 
 For the following example, the BBB’s UART4 is used:
 
-P9_13 UART4_TXD  ---- connected ---- RXD_USB_TTL 
+P9_13 UART4_TXD  <----> connected <----> RXD_USB_TTL 
 
-P9_11 UART4_RXD  ---- connected ---- TXD_USB_TTL 
+P9_11 UART4_RXD  <----> connected <----> TXD_USB_TTL 
 
 The UART4 overlay is loaded in order to enable the UART4, for this write the following commands:
 
@@ -21,11 +21,10 @@ export SLOTS=/sys/devices/bone_capemgr.9/slots
 
 sudo su -c "echo BB-UART4 > $SLOTS"
 
-
 CONNECTIONS BBB - MPU6050 (I2C2 /dev/i2c‐1)
 
-  |P9_20 |SDA PIN
-  |P9_19 |SLC PIN 
-  |P9_3  |VCC PIN
-  |P9_1  |GND PIN
+    |P9_20 |SDA PIN
+    |P9_19 |SLC PIN 
+    |P9_3  |VCC PIN
+    |P9_1  |GND PIN
   
