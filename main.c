@@ -90,7 +90,7 @@ int main(){
 
   float roll_acc;
   //printf("DMP - ROLL");
-  printf("ROLL_DMP ROLL_ACC ROLL_RATE_DMP ROLL_RATE_GYRO\n");
+  printf("ROLL_DMP,ROLL_ACC,ROLL_RATE_DMP,ROLL_RATE_GYRO\n");
   for(;;)
   { 
      // DMP update, YAW - PITCH - ROLL (ypr)
@@ -106,11 +106,11 @@ int main(){
 
      // ROLL - Rotate around X
      // PITCH - Rotate  around Y
-     printf("%2.4f %2.4f %2.4f %2.4f\n", ypr[ROLL], roll_acc, gyro[ROLL] / 16.4, (gyro_xyz[0] - roll_gyro_offset)/16.4 );
+     printf("%2.4f,%2.4f,%2.4f,%2.4f\n", ypr[ROLL], roll_acc, (gyro[ROLL]) / 16.4, (gyro_xyz[0])/16.4 );
 
      // convert to string to transmit via UART
-     gcvt( (gyro[ROLL] / 16.4), 4, dmp_roll_acc_str);
-     gcvt((gyro_xyz[0] - roll_gyro_offset)/16.4, 4,  roll_acc_str);
+     gcvt( (gyro[ROLL]) / 16.4, 4, dmp_roll_acc_str);
+     gcvt((gyro_xyz[0])/16.4, 4,  roll_acc_str);
 
      strcpy(to_uart, "DMP_ROLL:");
      strcat(to_uart, dmp_roll_acc_str);
