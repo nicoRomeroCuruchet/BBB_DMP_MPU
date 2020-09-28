@@ -5,12 +5,16 @@
 #include <string.h>
 #include <math.h>
 #include<fcntl.h>
-#include<termios.h> // using the termios.h library
+#include<termios.h> 
 #include <stdint.h>
 
+#include "GPIO/GPIO.h" 
 #include "MotionSensor/helper_3dmath.h"
 #include "MotionSensor/inv_mpu_lib/inv_mpu.h"
 #include "MotionSensor/inv_mpu_lib/inv_mpu_dmp_motion_driver.h"
+
+using namespace exploringBB;
+using namespace std;
 
 #define DIM 3
 #define YAW 0 
@@ -70,7 +74,6 @@ int main(){
   tcflush(file, TCIFLUSH); // discard file information not transmitted
   tcsetattr(file, TCSANOW, &options); // changes occur immmediately
 
-
   for(unsigned int i = 0; i < 10; ++i ) to_uart[i] = '\0';
  
   if (!initDMP()){
@@ -87,12 +90,15 @@ int main(){
   }
 
   roll_gyro_offset /= 3000;
-
   float roll_acc;
   //printf("DMP - ROLL");
   printf("ROLL_DMP,ROLL_ACC,ROLL_RATE_DMP,ROLL_RATE_GYRO\n");
+  GPIO outGPIO(49);
+  outGPIO.setDirection(OUTPUT);
+  outGPIO.streamOpen();
   for(;;)
-  { 
+  {
+     outGPIO.streamWrite(HIGH); 
      // DMP update, YAW - PITCH - ROLL (ypr)
      updateDMP();
 
@@ -109,7 +115,7 @@ int main(){
      printf("%2.4f,%2.4f,%2.4f,%2.4f\n", ypr[ROLL], roll_acc, (gyro[ROLL]) / 16.4, (gyro_xyz[0])/16.4 );
 
      // convert to string to transmit via UART
-     gcvt( (gyro[ROLL]) / 16.4, 4, dmp_roll_acc_str);
+     gcvt((gyro[ROLL])/16.4, 4, dmp_roll_acc_str);
      gcvt((gyro_xyz[0])/16.4, 4,  roll_acc_str);
 
      strcpy(to_uart, "DMP_ROLL:");
@@ -123,12 +129,11 @@ int main(){
        perror("Failed to write to the output\n");
        return -1;
      }
-     delay_ms(5);
+     outGPIO.streamWrite(LOW);
+     delay_ms(3);
   }
-
   return 0;
 }
-
 
 int initDMP(void)
 {
@@ -195,7 +200,7 @@ int initDMP(void)
   }
 
   printf("Setting DMP fifo rate...\n");
-  uint8_t rate = 100;
+  uint8_t rate = 200;
   if (dmp_set_fifo_rate(rate)!=0) 
   {
     printf("Failed to set dmp fifo rate!\n");
