@@ -8,6 +8,16 @@
 #include<termios.h> 
 #include <stdint.h>
 
+
+#include <errno.h>
+#include <signal.h>
+#include <fcntl.h>
+#include <ctype.h>
+#include <termios.h>
+#include <sys/types.h>
+#include <sys/mman.h>
+
+
 #include "GPIO/GPIO.h" 
 #include "MotionSensor/helper_3dmath.h"
 #include "MotionSensor/inv_mpu_lib/inv_mpu.h"
@@ -21,10 +31,13 @@ using namespace std;
 #define PITCH 1
 #define ROLL 2
 
-
-#define wrap_180(x) (x < -180 ? x+360 : (x > 180 ? x - 360: x))
-#define delay_ms(a)    usleep(a*1000)
+#define wrap_180(x) (x < -180 ? x+360:(x > 180 ? x - 360: x))
+#define delay_ms(a) usleep(a*1000)
 #define RAD_TO_DEG  57.296
+
+#define MAP_SIZE 4096UL
+#define MAP_MASK (MAP_SIZE - 1)
+
 
 int r;
 int16_t sensors;
@@ -56,10 +69,32 @@ uint8_t getYawPitchRoll(float *data, Quaternion *q, VectorFloat *gravity);
 
 int main(){
 
+  int fd;
+  void *map_base, *virt_addr;
+  unsigned long read_result, writeval;
+  off_t target = 0x4a300008;
+
+  if((fd = open("/dev/mem", O_RDWR | O_SYNC)) == -1){
+    printf("Failed to open memory!\n");
+    return -1;
+  }
+  fflush(stdout);
+
+  map_base = mmap(0, MAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, target & ~MAP_MASK);
+  if(map_base == (void *) -1) {
+     printf("Failed to map base address\n");
+     return -1;
+  }
+  fflush(stdout);
+
+  virt_addr = map_base + (target & MAP_MASK);
+  
   int file, count;
   char roll_acc_str[20];
   char dmp_roll_acc_str[20];
-  char to_uart[30];
+  char roll_gyro_str[20];
+  char roll_comp_str[20];
+  char to_uart[80];
 
   if ((file = open("/dev/ttyO4", O_RDWR | O_NOCTTY | O_NDELAY))<0){
      perror("UART: Failed to open the file.\n");
@@ -85,6 +120,7 @@ int main(){
   for(unsigned int i = 0; i < 3000; i++){
 
     mpu_get_gyro_reg(gyro_xyz);
+    mpu_get_accel_reg(acc_xyz);
     roll_gyro_offset += gyro_xyz[0];
     
   }
@@ -93,44 +129,64 @@ int main(){
   float roll_acc;
   //printf("DMP - ROLL");
   printf("ROLL_DMP,ROLL_ACC,ROLL_RATE_DMP,ROLL_RATE_GYRO\n");
-  GPIO outGPIO(49);
+  GPIO outGPIO(115);               // P9_27
   outGPIO.setDirection(OUTPUT);
   outGPIO.streamOpen();
+
+  unsigned long dt = 0;
+  unsigned long init, end; 
+
+  float roll_gyro = atan2(acc_xyz[1],acc_xyz[2])*180/M_PI;
+  float roll_comp = atan2(acc_xyz[1],acc_xyz[2])*180/M_PI;
+
   for(;;)
   {
-     outGPIO.streamWrite(HIGH); 
+
+    init = *((unsigned long *) virt_addr);
      // DMP update, YAW - PITCH - ROLL (ypr)
-     updateDMP();
+    updateDMP();
+    mpu_get_accel_reg(acc_xyz);
+    mpu_get_gyro_reg(gyro_xyz);
+    //read direct registers of accelerometer
+    //estimate roll and pitch directs accelerometer reads
+    //pitch_acc = atan2(acc_xyz[0], sqrt(acc_xyz[1]*acc_xyz[1] + acc_xyz[2]*acc_xyz[2]))*180/M_PI;
+    roll_acc = atan2(acc_xyz[1],acc_xyz[2])*180/M_PI;
+    roll_gyro += (gyro_xyz[0] - roll_gyro_offset)*dt*1e-6/16.4;
+    roll_comp = roll_gyro*0.8 + roll_acc*0.2;
+    // ROLL - Rotate around X
+    // PITCH - Rotate  around Y
+    //printf("%2.4f,%2.4f,%2.4f,%2.4f\n", ypr[ROLL], roll_acc, (gyro[ROLL]) / 16.4, (gyro_xyz[0])/16.4 );
+    // convert to string to transmit via UART
+     
+    gcvt(ypr[ROLL], 4, dmp_roll_acc_str);
+    gcvt(roll_acc, 4,  roll_acc_str);
+    gcvt(roll_gyro, 4, roll_gyro_str);
+    gcvt(roll_comp, 4, roll_comp_str);
 
-     // read direct registers of accelerometer
-     mpu_get_accel_reg(acc_xyz);
-     mpu_get_gyro_reg(gyro_xyz);
+    strcpy(to_uart, "GYRO_ROLL:");
+    strcat(to_uart, roll_gyro_str);
+    strcat(to_uart, "\t ");
+    strcat(to_uart, "ACC_ROLL:");
+    strcat(to_uart, roll_acc_str);
+    strcat(to_uart, "\t");
+    strcat(to_uart, "DMP_ROLL:");
+    strcat(to_uart, dmp_roll_acc_str);
+    strcat(to_uart, "\t ");
+    strcat(to_uart, "COMP_ROLL:");
+    strcat(to_uart, roll_comp_str);
+    strcat(to_uart,  "\n");
+    //printf("%s\n",to_uart );
 
-     // estimate roll and pitch directs accelerometer reads
-     //pitch_acc = atan2(acc_xyz[0], sqrt(acc_xyz[1]*acc_xyz[1] + acc_xyz[2]*acc_xyz[2]))*180/M_PI;
-     roll_acc = atan2(acc_xyz[1],acc_xyz[2])*180/M_PI;
+    if ((count = write(file, to_uart,strlen(to_uart)))<0){
+      perror("Failed to write to the output\n");
+      return -1;
+    }
 
-     // ROLL - Rotate around X
-     // PITCH - Rotate  around Y
-     printf("%2.4f,%2.4f,%2.4f,%2.4f\n", ypr[ROLL], roll_acc, (gyro[ROLL]) / 16.4, (gyro_xyz[0])/16.4 );
+    end = *((unsigned long *) virt_addr);
+    dt =  (end - init);
+    //printf("%f\n",roll_gyro );
 
-     // convert to string to transmit via UART
-     gcvt((gyro[ROLL])/16.4, 4, dmp_roll_acc_str);
-     gcvt((gyro_xyz[0])/16.4, 4,  roll_acc_str);
-
-     strcpy(to_uart, "DMP_ROLL:");
-     strcat(to_uart, dmp_roll_acc_str);
-     strcat(to_uart, "\t");
-     strcat(to_uart, "ACC_ROLL:");
-     strcat(to_uart, roll_acc_str);
-     strcat(to_uart,  "\n");
-
-     if ((count = write(file, to_uart,strlen(to_uart)))<0){
-       perror("Failed to write to the output\n");
-       return -1;
-     }
-     outGPIO.streamWrite(LOW);
-     delay_ms(3);
+    
   }
   return 0;
 }
@@ -200,7 +256,7 @@ int initDMP(void)
   }
 
   printf("Setting DMP fifo rate...\n");
-  uint8_t rate = 200;
+  uint8_t rate = 150;
   if (dmp_set_fifo_rate(rate)!=0) 
   {
     printf("Failed to set dmp fifo rate!\n");
@@ -227,29 +283,27 @@ int initDMP(void)
 
 void updateDMP(void)
 {
+
    while (dmp_read_fifo(g,a,_q,&sensors,&fifoCount)!=0); //gyro and accel can be null because of being disabled in the efeatures
+   //dmp_read_fifo(g,a,_q,&sensors,&fifoCount);
    q = _q;
    getGravity(&gravity, &q);
    getYawPitchRoll(ypr, &q, &gravity);
-
    //scaling for degrees output
-   for (int i=0;i<DIM;i++)
-     ypr[i]*=180/M_PI;
-
+   for (int i=0;i<DIM;i++) ypr[i]*=180/M_PI;
    //unwrap yaw when it reaches 180
    ypr[YAW] = wrap_180(ypr[0]);
-
   //change sign of Pitch, MPU is attached upside down
   //ypr[PITCH]*=-1.0;
-
   //0=gyroX, 1=gyroY, 2=gyroZ
   //swapped to match Yaw,Pitch,Roll
   //Scaled from deg/s to get tr/s
   for (int i=0;i<DIM;i++){
-  gyro[i]   = (float)(g[DIM-i-1]); //131.0/360.0;
-  accel[i]  = (float)(a[DIM-i-1]);
-  compass[i] = (float)(c[DIM-i-1]);
+    gyro[i]   = (float)(g[DIM-i-1]); //131.0/360.0;
+    accel[i]  = (float)(a[DIM-i-1]);
+    compass[i] = (float)(c[DIM-i-1]);
   }
+
 }
 
 uint8_t getGravity(VectorFloat *v, Quaternion *q) {
@@ -262,14 +316,15 @@ uint8_t getGravity(VectorFloat *v, Quaternion *q) {
 uint8_t getYawPitchRoll(float *data, Quaternion *q, VectorFloat *gravity) {
   // yaw: (about Z axis)
   data[YAW] = atan2(2*q -> x*q -> y - 2*q -> w*q -> z, 2*q -> w*q -> w + 2*q -> x*q -> x - 1);
-
   // pitch: (nose up/down, about Y axis)
   //data[PITCH] = atan(gravity -> x / sqrt(gravity -> y*gravity -> y + gravity -> z*gravity -> z));
   data[PITCH] = atan2(gravity -> x, sqrt(gravity -> y*gravity -> y + gravity -> z*gravity -> z));
-
   // roll: (tilt left/right, about X axis)
   //data[ROLL] = atan(gravity -> y / sqrt(gravity -> x*gravity -> x + gravity -> z*gravity -> z));
-  data[ROLL] = atan2(gravity -> y, gravity -> z );
+  if (gravity -> z != 0) 
+    data[ROLL] = atan2(gravity -> y, gravity -> z );
+  else
+    data[ROLL] = 0.0;
   return 0;
 }
 
