@@ -49,7 +49,7 @@ THE SOFTWARE.
 #ifndef _I2CDEV_H_
 #define _I2CDEV_H_
 
-#define I2C "/dev/i2c-1"
+#define I2C "/dev/i2c-2"
 #define I2C_OK 0
 #define I2C_ERR -1
 
