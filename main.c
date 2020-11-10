@@ -157,7 +157,8 @@ int main(){
     // PITCH - Rotate  around Y
     //printf("%2.4f,%2.4f,%2.4f,%2.4f\n", ypr[ROLL], roll_acc, (gyro[ROLL]) / 16.4, (gyro_xyz[0])/16.4 );
     // convert to string to transmit via UART
-     
+
+    
     gcvt(ypr[ROLL], 4, dmp_roll_acc_str);
     gcvt(roll_acc, 4,  roll_acc_str);
     gcvt(roll_gyro, 4, roll_gyro_str);
@@ -165,13 +166,13 @@ int main(){
 
     strcpy(to_uart, "GYRO_ROLL:");
     strcat(to_uart, roll_gyro_str);
-    strcat(to_uart, "\t ");
+    strcat(to_uart, "\t");
     strcat(to_uart, "ACC_ROLL:");
     strcat(to_uart, roll_acc_str);
     strcat(to_uart, "\t");
     strcat(to_uart, "DMP_ROLL:");
     strcat(to_uart, dmp_roll_acc_str);
-    strcat(to_uart, "\t ");
+    strcat(to_uart, "\t");
     strcat(to_uart, "COMP_ROLL:");
     strcat(to_uart, roll_comp_str);
     strcat(to_uart,  "\n");
@@ -181,10 +182,10 @@ int main(){
       perror("Failed to write to the output\n");
       return -1;
     }
-
+    
     end = *((unsigned long *) virt_addr);
     dt =  (end - init);
-    //printf("%f\n",roll_gyro );
+    //if(dt > 10000) printf("%d\n",dt);
 
     
   }
