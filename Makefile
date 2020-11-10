@@ -1,6 +1,6 @@
-CXX=arm-linux-gnueabihf-g++-4.6
-CXXFLAGS= -Wall -g -O2 -std=gnu++0x -pthread 
-CXX_OPTS= -Wall -g -O2 -std=gnu++0x -pthread
+CXX=g++
+CXXFLAGS= -Wall -g -O2 -std=gnu++0x -pthread   
+CXX_OPTS= -Wall -g -O2 -std=gnu++0x -pthread 
 
 PROG=dmp
 
